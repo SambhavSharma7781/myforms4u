@@ -4,7 +4,7 @@ import prisma from '@/services/prisma';
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
     const authResult = await auth();
@@ -18,6 +18,7 @@ export async function PATCH(
       return NextResponse.json({ success: false, message: 'Title is required' }, { status: 400 });
     }
 
+    const params = await context.params;
     const formId = params.id;
 
     // Check if form exists and belongs to user
