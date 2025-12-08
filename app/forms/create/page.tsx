@@ -340,7 +340,7 @@ export default function CreateFormPage() {
   };
 
   return (
-    <div className="bg-blue-50">
+    <div className="bg-blue-50 min-h-full">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 py-4 sm:py-6 lg:py-8">
         
         {/* Form Header Card - Our Style */}
