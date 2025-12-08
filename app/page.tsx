@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState, useEffect } from "react";
-import { useAuth } from "@clerk/nextjs";
+import { useAuth, SignInButton } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import FloatingActionButton from "@/components/FloatingActionButton";
@@ -174,27 +174,38 @@ export default function Dashboard() {
         <div className="mb-8 sm:mb-10 lg:mb-12" id="new-form-section">
           <h2 className="text-base sm:text-lg font-medium text-gray-700 mb-3 sm:mb-4">Start a new form</h2>
           <div className="w-full sm:w-48">
-            <button 
-              onClick={() => {
-                if (isSignedIn) {
-                  router.push('/forms/create');
-                } else {
-                  router.push('/sign-in');
-                }
-              }}
-              className="block w-full"
-            >
-              <div className="bg-white border-2 border-dashed border-gray-300 rounded-lg p-6 sm:p-8 hover:border-blue-400 hover:bg-blue-50 transition-colors cursor-pointer">
-                <div className="text-center">
-                  <div className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-2 sm:mb-3 bg-blue-100 rounded-full flex items-center justify-center">
-                    <svg className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                    </svg>
+            {isSignedIn ? (
+              <button 
+                onClick={() => router.push('/forms/create')}
+                className="block w-full"
+              >
+                <div className="bg-white border-2 border-dashed border-gray-300 rounded-lg p-6 sm:p-8 hover:border-blue-400 hover:bg-blue-50 transition-colors cursor-pointer">
+                  <div className="text-center">
+                    <div className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-2 sm:mb-3 bg-blue-100 rounded-full flex items-center justify-center">
+                      <svg className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                      </svg>
+                    </div>
+                    <p className="text-xs sm:text-sm font-medium text-gray-900">New form</p>
                   </div>
-                  <p className="text-xs sm:text-sm font-medium text-gray-900">New form</p>
                 </div>
-              </div>
-            </button>
+              </button>
+            ) : (
+              <SignInButton mode="modal">
+                <button className="block w-full">
+                  <div className="bg-white border-2 border-dashed border-gray-300 rounded-lg p-6 sm:p-8 hover:border-blue-400 hover:bg-blue-50 transition-colors cursor-pointer">
+                    <div className="text-center">
+                      <div className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-2 sm:mb-3 bg-blue-100 rounded-full flex items-center justify-center">
+                        <svg className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                        </svg>
+                      </div>
+                      <p className="text-xs sm:text-sm font-medium text-gray-900">New form</p>
+                    </div>
+                  </div>
+                </button>
+              </SignInButton>
+            )}
           </div>
         </div>
 
@@ -462,7 +473,7 @@ export default function Dashboard() {
       )}
 
       {/* Floating Action Button for Create New Form */}
-      {showFab && <FloatingActionButton />}
+      {showFab && <FloatingActionButton isSignedIn={isSignedIn} />}
     </div>
   );
 }
