@@ -134,11 +134,6 @@ export async function POST(
         }
       });
 
-        id: answerRecord.id,
-        answerText: answerRecord.answerText,
-        selectedOptions: answerRecord.selectedOptions,
-        selectedOptionsLength: answerRecord.selectedOptions.length
-      });
       return answerRecord;
     });
 
