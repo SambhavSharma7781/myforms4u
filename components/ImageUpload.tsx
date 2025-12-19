@@ -2,6 +2,7 @@
 
 import React, { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
+import { useToast } from '@/hooks/use-toast';
 
 interface ImageUploadProps {
   imageUrl?: string;
@@ -10,6 +11,7 @@ interface ImageUploadProps {
 }
 
 export default function ImageUpload({ imageUrl, onImageUpload, onImageRemove }: ImageUploadProps) {
+  const { toast } = useToast();
   // useState hook to track if image is being uploaded
   const [isUploading, setIsUploading] = useState(false);
   
@@ -26,7 +28,11 @@ export default function ImageUpload({ imageUrl, onImageUpload, onImageRemove }: 
     if (!file) return; // Exit if no file selected
 
     if (!file.type.startsWith('image/')) {
-      alert('Please select an image file');
+      toast({
+        title: "Invalid file type",
+        description: "Please select an image file",
+        variant: "destructive",
+      });
       return;
     }
 

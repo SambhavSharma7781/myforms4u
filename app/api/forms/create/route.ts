@@ -16,17 +16,6 @@ export async function POST(request: NextRequest) {
     // Get data from request
     const data = await request.json();
     const { title, description, questions, sections, published = false, settings } = data;
-    
-    if (process.env.NODE_ENV === 'development') console.log('🟢 CREATE API - Received data:', {
-      title,
-      sectionsCount: sections?.length || 0,
-      sections: sections?.map((s: any) => ({
-        id: s.id,
-        title: s.title,
-        questionsCount: s.questions?.length || 0
-      })) || 'No sections'
-    });
-
 
     // Create or find user in our database
     let user = await prisma.user.findUnique({
@@ -129,9 +118,10 @@ export async function POST(request: NextRequest) {
 
       // Create questions for the default section
       for (const question of questions) {
+        const questionText = question.question || question.text || '';
         const createdQuestion = await prisma.question.create({
           data: {
-            text: question.question || question.text,
+            text: questionText.trim() === '' ? 'Untitled Question' : questionText,
             description: question.description || null,
             type: question.type,
             required: question.required || false,

@@ -103,8 +103,6 @@ export default function QuestionCard({
     if (onUpdate && id) {
       const filteredOptions = options.filter(opt => opt.text.trim() !== "" || opt.imageUrl);
       
-      if (process.env.NODE_ENV === 'development') console.log("notifyParent called with question:", question);
-
       onUpdate({
         id,
         question,
@@ -127,12 +125,10 @@ export default function QuestionCard({
   useEffect(() => {
     if (questionType === "MULTIPLE_CHOICE" || questionType === "CHECKBOXES" || questionType === "DROPDOWN") {
       if (options.length === 0) {
-        if (process.env.NODE_ENV === 'development') console.log('🔧 Adding default options for option-based question type');
         setOptions([{ text: "Option 1", imageUrl: undefined }, { text: "", imageUrl: undefined }]);
       }
     } else {
       if (options.length > 0) {
-        if (process.env.NODE_ENV === 'development') console.log('🔧 Clearing options for non-option-based question type');
         setOptions([]);
       }
     }
@@ -181,13 +177,6 @@ export default function QuestionCard({
   ];
 
   const handleTypeChange = (newType: QuestionType) => {
-    if (process.env.NODE_ENV === 'development') console.log('🔄 QUESTION TYPE CHANGE:', {
-      from: questionType,
-      to: newType,
-      questionId: id,
-      currentOptions: options
-    });
-    
     setQuestionType(newType);
     
     // Initialize correct answers for text questions

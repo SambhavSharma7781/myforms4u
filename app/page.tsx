@@ -6,6 +6,17 @@ import { useAuth, SignInButton } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import FloatingActionButton from "@/components/FloatingActionButton";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 
 interface UserForm {
   id: string;
@@ -36,6 +47,8 @@ export default function Dashboard() {
   const [renamingFormId, setRenamingFormId] = useState<string | null>(null);
   const [newTitle, setNewTitle] = useState<string>('');
   const [showFab, setShowFab] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [formToDelete, setFormToDelete] = useState<string | null>(null);
 
   useEffect(() => {
     if (isLoaded) {
@@ -148,21 +161,28 @@ export default function Dashboard() {
     setOpenMenuId(null);
   };
 
-  const handleDeleteForm = async (formId: string) => {
-    // Confirm before deleting
-    if (confirm('Are you sure you want to delete this form?')) {
-      try {
-        const response = await fetch(`/api/forms/delete/${formId}`, {
-          method: 'DELETE'
-        });
-        
-        if (response.ok) {
-          // Remove from UI
-          setUserForms(userForms.filter(form => form.id !== formId));
-        }
-      } catch (error) {
-        // Error deleting form
+  const handleDeleteForm = (formId: string) => {
+    setFormToDelete(formId);
+    setDeleteDialogOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!formToDelete) return;
+    
+    try {
+      const response = await fetch(`/api/forms/delete/${formToDelete}`, {
+        method: 'DELETE'
+      });
+      
+      if (response.ok) {
+        // Remove from UI
+        setUserForms(userForms.filter(form => form.id !== formToDelete));
       }
+    } catch (error) {
+      // Error deleting form
+    } finally {
+      setDeleteDialogOpen(false);
+      setFormToDelete(null);
     }
   };
 
@@ -209,9 +229,9 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Owned by you section */}
+        {/* My Forms section */}
         <div>
-          <h2 className="text-base sm:text-lg font-medium text-gray-700 mb-4 sm:mb-6">Owned by you</h2>
+          <h2 className="text-base sm:text-lg font-medium text-gray-700 mb-4 sm:mb-6">My Forms</h2>
           
           {/* Forms grid - responsive */}
           {!isLoaded || loading ? (
@@ -337,63 +357,72 @@ export default function Dashboard() {
                           {form.published ? 'Live' : 'Draft'}
                         </span>
                         
-                        <div className="relative">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleMenuToggle(form.id);
-                            }}
-                            className="p-1 sm:p-1.5 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200 hover:shadow-sm">
-                            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                              <path d="M12,16A2,2 0 0,1 14,18A2,2 0 0,1 12,20A2,2 0 0,1 10,18A2,2 0 0,1 12,16M12,10A2,2 0 0,1 14,12A2,2 0 0,1 12,14A2,2 0 0,1 10,12A2,2 0 0,1 12,10M12,4A2,2 0 0,1 14,6A2,2 0 0,1 12,8A2,2 0 0,1 10,6A2,2 0 0,1 12,4Z" />
-                            </svg>
-                          </button>
+                        <DropdownMenu.Root open={openMenuId === form.id} onOpenChange={(open) => {
+                          if (!open) setOpenMenuId(null);
+                        }}>
+                          <DropdownMenu.Trigger asChild>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleMenuToggle(form.id);
+                              }}
+                              className="p-1 sm:p-1.5 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200 hover:shadow-sm">
+                              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M12,16A2,2 0 0,1 14,18A2,2 0 0,1 12,20A2,2 0 0,1 10,18A2,2 0 0,1 12,16M12,10A2,2 0 0,1 14,12A2,2 0 0,1 12,14A2,2 0 0,1 10,12A2,2 0 0,1 12,10M12,4A2,2 0 0,1 14,6A2,2 0 0,1 12,8A2,2 0 0,1 10,6A2,2 0 0,1 12,4Z" />
+                              </svg>
+                            </button>
+                          </DropdownMenu.Trigger>
                           
-                          {/* Dropdown Menu */}
-                          {openMenuId === form.id && (
-                            <div className="absolute right-0 top-full mt-2 w-44 sm:w-48 bg-white rounded-md shadow-lg border border-gray-200 z-20">
-                            <div className="py-1">
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleRenameForm(form.id);
-                                }}
-                                className="flex items-center space-x-2 w-full px-3 sm:px-4 py-2 text-xs sm:text-sm text-gray-700 hover:bg-gray-100 text-left">
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                </svg>
-                                <span>Rename</span>
-                              </button>
-                              
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleOpenInNewTab(form.id);
-                                }}
-                                className="flex items-center space-x-2 w-full px-3 sm:px-4 py-2 text-xs sm:text-sm text-gray-700 hover:bg-gray-100 text-left">
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                                </svg>
-                                <span>Open in new tab</span>
-                              </button>
-                              
-                              <hr className="my-1" />
-                              
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleDeleteForm(form.id);
-                                }}
-                                className="flex items-center space-x-2 w-full px-3 sm:px-4 py-2 text-xs sm:text-sm text-red-600 hover:bg-red-50 text-left">
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                </svg>
-                                <span>Delete</span>
-                              </button>
-                            </div>
-                          </div>
-                          )}
-                        </div>
+                          <DropdownMenu.Portal>
+                            <DropdownMenu.Content
+                              align="end"
+                              sideOffset={8}
+                              collisionPadding={10}
+                              className="w-44 sm:w-48 bg-white rounded-md shadow-lg border border-gray-200 z-50 animate-in fade-in-0 zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=top]:slide-in-from-bottom-2"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <div className="py-1">
+                                <DropdownMenu.Item
+                                  onSelect={(e) => {
+                                    e.preventDefault();
+                                    handleRenameForm(form.id);
+                                  }}
+                                  className="flex items-center space-x-2 w-full px-3 sm:px-4 py-2 text-xs sm:text-sm text-gray-700 hover:bg-gray-100 text-left outline-none cursor-pointer">
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                  </svg>
+                                  <span>Rename</span>
+                                </DropdownMenu.Item>
+                                
+                                <DropdownMenu.Item
+                                  onSelect={(e) => {
+                                    e.preventDefault();
+                                    handleOpenInNewTab(form.id);
+                                  }}
+                                  className="flex items-center space-x-2 w-full px-3 sm:px-4 py-2 text-xs sm:text-sm text-gray-700 hover:bg-gray-100 text-left outline-none cursor-pointer">
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                  </svg>
+                                  <span>Open in new tab</span>
+                                </DropdownMenu.Item>
+                                
+                                <DropdownMenu.Separator className="my-1 h-px bg-gray-200" />
+                                
+                                <DropdownMenu.Item
+                                  onSelect={(e) => {
+                                    e.preventDefault();
+                                    handleDeleteForm(form.id);
+                                  }}
+                                  className="flex items-center space-x-2 w-full px-3 sm:px-4 py-2 text-xs sm:text-sm text-red-600 hover:bg-red-50 text-left outline-none cursor-pointer">
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                  </svg>
+                                  <span>Delete</span>
+                                </DropdownMenu.Item>
+                              </div>
+                            </DropdownMenu.Content>
+                          </DropdownMenu.Portal>
+                        </DropdownMenu.Root>
                       </div>
                     </div>
                   </div>
@@ -471,6 +500,26 @@ export default function Dashboard() {
           </div>
         </div>
       )}
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Form</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this form? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setDeleteDialogOpen(false)}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete}>
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Floating Action Button for Create New Form */}
       {showFab && <FloatingActionButton isSignedIn={isSignedIn} />}

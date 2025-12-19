@@ -11,7 +11,11 @@ interface Form {
   createdAt: string;
 }
 
-export default function SearchBar() {
+interface SearchBarProps {
+  hasUserForms?: boolean;
+}
+
+export default function SearchBar({ hasUserForms = true }: SearchBarProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [suggestions, setSuggestions] = useState<Form[]>([]);
   const [isOpen, setIsOpen] = useState(false);
@@ -39,6 +43,13 @@ export default function SearchBar() {
         return;
       }
 
+      // Don't search if user has no forms
+      if (!hasUserForms) {
+        setSuggestions([]);
+        setIsOpen(false);
+        return;
+      }
+
       setLoading(true);
       try {
         const response = await fetch(`/api/forms/search?q=${encodeURIComponent(searchQuery.trim())}`);
@@ -58,7 +69,7 @@ export default function SearchBar() {
     // Debounce search
     const timeoutId = setTimeout(searchForms, 300);
     return () => clearTimeout(timeoutId);
-  }, [searchQuery]);
+  }, [searchQuery, hasUserForms]);
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString();
@@ -83,7 +94,7 @@ export default function SearchBar() {
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           placeholder="Search forms"
-          className="w-full pl-9 sm:pl-12 pr-3 sm:pr-4 py-2 sm:py-3 text-xs sm:text-sm border-0 bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-full focus:bg-white dark:focus:bg-gray-700 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:outline-none transition-all duration-200 placeholder-gray-500 dark:placeholder-gray-400"
+          className="w-full pl-9 sm:pl-12 pr-3 sm:pr-4 py-2 sm:py-3 text-xs sm:text-sm border-0 bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-xl focus:bg-white dark:focus:bg-gray-700 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:outline-none transition-all duration-200 placeholder-gray-500 dark:placeholder-gray-400"
           onFocus={() => {
             if (suggestions.length > 0) setIsOpen(true);
           }}

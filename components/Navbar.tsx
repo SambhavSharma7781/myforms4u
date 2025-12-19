@@ -32,9 +32,10 @@ export { navbarEvents };
 
 export default function Navbar() {
   const pathname = usePathname();
-  const { isSignedIn } = useAuth();
+  const { isSignedIn, isLoaded } = useAuth();
   const [formStatus, setFormStatus] = useState({ published: false, acceptingResponses: true, formId: '', title: '' });
   const [linkCopied, setLinkCopied] = useState(false);
+  const [hasUserForms, setHasUserForms] = useState(false);
   
   const isCreatePage = pathname === "/forms/create";
   const isFormEditPage = pathname.startsWith("/forms/") && pathname !== "/forms/create" && !pathname.includes("/view");
@@ -58,6 +59,30 @@ export default function Navbar() {
       setFormStatus({ published: false, acceptingResponses: true, formId: '', title: '' });
     }
   }, [isFormEditPage, isCreatePage]);
+
+  // Check if user has any forms for search functionality
+  useEffect(() => {
+    const checkUserForms = async () => {
+      if (isSignedIn && isLoaded) {
+        try {
+          const response = await fetch('/api/forms/user');
+          const data = await response.json();
+          
+          if (data.success) {
+            setHasUserForms(data.forms && data.forms.length > 0);
+          } else {
+            setHasUserForms(false);
+          }
+        } catch (error) {
+          setHasUserForms(false);
+        }
+      } else {
+        setHasUserForms(false);
+      }
+    };
+
+    checkUserForms();
+  }, [isSignedIn, isLoaded, pathname]); // Re-check when navigating
   
   // Don't render navbar on public form view pages or auth pages
   if (isPublicFormView || isAuthPage) {
@@ -236,11 +261,11 @@ export default function Navbar() {
             </Link>
           </div>
 
-          {/* Center - Search Bar (only on homepage) */}
-          <div className="flex-1 flex justify-center px-2 sm:px-4 md:px-8 max-w-2xl">
+          {/* Right - Search Bar (only on homepage) */}
+          <div className="flex flex-1 justify-end items-center mx-2 sm:mx-3 min-w-0">
             {!isCreatePage && !isFormEditPage && isSignedIn && (
-              <div className="w-full">
-                <SearchBar />
+              <div className="w-full max-w-[140px] sm:max-w-xs md:max-w-md">
+                <SearchBar hasUserForms={hasUserForms} />
               </div>
             )}
           </div>
@@ -252,9 +277,34 @@ export default function Navbar() {
               getPublishButton()
             ) : null}
             
-            {/* Authentication */}
-            {isSignedIn ? (
-              <UserButton afterSignOutUrl="/" />
+            {/* Authentication - Show loading state while Clerk is initializing */}
+            {!isLoaded ? (
+              // Show a placeholder while loading to prevent flicker
+              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-gray-200 animate-pulse"></div>
+            ) : isSignedIn ? (
+              <UserButton 
+                afterSignOutUrl="/" 
+                appearance={{
+                  elements: {
+                    avatarBox: {
+                      width: "36px",
+                      height: "36px",
+                      "@media (min-width: 640px)": {
+                        width: "40px",
+                        height: "40px"
+                      }
+                    },
+                    userButtonAvatarBox: {
+                      width: "36px",
+                      height: "36px",
+                      "@media (min-width: 640px)": {
+                        width: "40px",
+                        height: "40px"
+                      }
+                    }
+                  }
+                }}
+              />
             ) : (
               <SignInButton mode="modal">
                 <Button variant="outline" size="sm" className="text-xs sm:text-sm px-2 sm:px-3 min-h-[32px] sm:min-h-[36px]">

@@ -10,7 +10,6 @@ export async function GET(
   try {
     const { id: formId, token } = await params;
 
-    if (process.env.NODE_ENV === 'development') console.log('Fetching response for editing:', { formId, token });
 
     // Find response by token
     const response = await prisma.response.findFirst({
@@ -125,8 +124,6 @@ export async function PUT(
     const body = await request.json();
     const { responses } = body;
 
-    if (process.env.NODE_ENV === 'development') console.log('Updating response:', { formId, token });
-    if (process.env.NODE_ENV === 'development') console.log('New responses:', responses);
 
     // Find response by token
     const responseRecord = await prisma.response.findFirst({
@@ -203,7 +200,6 @@ export async function PUT(
 
     // Create new answers
     const answerPromises = Object.entries(responses).map(async ([questionId, answerData]) => {
-      if (process.env.NODE_ENV === 'development') console.log(`Processing Question ${questionId}:`, answerData);
       
       let answerText = null;
       let selectedOptions: string[] = [];
@@ -230,7 +226,6 @@ export async function PUT(
 
     await Promise.all(answerPromises);
 
-    if (process.env.NODE_ENV === 'development') console.log('Response updated successfully');
 
     return NextResponse.json({
       success: true,

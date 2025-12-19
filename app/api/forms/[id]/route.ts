@@ -44,21 +44,6 @@ export async function GET(
       );
     }
 
-    if (process.env.NODE_ENV === 'development') console.log('🔍 FETCHING FORM - Sections from DB:', form.sections?.map((s: any) => ({
-      title: s.title,
-      description: s.description,
-      questionsCount: s.questions?.length || 0
-    })));
-    if (process.env.NODE_ENV === 'development') console.log('🔍 FETCHING FORM - Form title/description from DB:', {
-      id: form.id,
-      title: form.title,
-      description: form.description
-    });
-    if (process.env.NODE_ENV === 'development') console.log('🎨 FORM THEME FROM DB:', { 
-      themeColor: form.themeColor, 
-      themeBackground: form.themeBackground 
-    });
-
     return NextResponse.json({
       success: true,
       form: {
@@ -136,8 +121,6 @@ export async function PUT(
     const data = await request.json();
     const { title, description, questions, published, settings } = data;
 
-    if (process.env.NODE_ENV === 'development') console.log('Updating form:', formId, 'with questions:', questions.length);
-
     // Verify form ownership
     const existingForm = await prisma.form.findFirst({
       where: {
@@ -153,8 +136,6 @@ export async function PUT(
       );
     }
 
-    if (process.env.NODE_ENV === 'development') console.log('Form found, deleting existing data...');
-
     // TODO: Fix these operations for sections-based structure
     // Delete existing answers first (to avoid constraint violation)
     // await prisma.answer.deleteMany({
@@ -167,8 +148,6 @@ export async function PUT(
     //   }
     // });
 
-    if (process.env.NODE_ENV === 'development') console.log('Skipping answer deletion for now');
-
     // Delete existing questions and their options  
     // await prisma.option.deleteMany({
     //   where: {
@@ -180,8 +159,6 @@ export async function PUT(
     //   }
     // });
 
-    if (process.env.NODE_ENV === 'development') console.log('Skipping option deletion for now');
-
     // await prisma.question.deleteMany({
     //   where: {
     //     section: {
@@ -190,16 +167,12 @@ export async function PUT(
     //   }
     // });
 
-    if (process.env.NODE_ENV === 'development') console.log('Skipping question deletion for now');
-
     // Delete existing sections
     await prisma.section.deleteMany({
       where: {
         formId: formId
       }
     });
-
-    if (process.env.NODE_ENV === 'development') console.log('Questions deleted, creating new ones...');
 
     // Update form with new data
     const updatedForm = await prisma.form.update({

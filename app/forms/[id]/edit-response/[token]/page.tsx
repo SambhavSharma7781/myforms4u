@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { formatTimeRemaining } from '@/lib/editToken';
+import { useToast } from '@/hooks/use-toast';
 
 interface FormData {
   id: string;
@@ -24,6 +25,7 @@ export default function EditResponsePage() {
   const router = useRouter();
   const formId = params.id as string;
   const token = params.token as string;
+  const { toast } = useToast();
 
   const [formData, setFormData] = useState<FormData | null>(null);
   const [responseData, setResponseData] = useState<ResponseData | null>(null);
@@ -117,7 +119,10 @@ export default function EditResponsePage() {
       const result = await updateResponse.json();
 
       if (result.success) {
-        alert('Response updated successfully!');
+        toast({
+          title: "Success",
+          description: "Response updated successfully!",
+        });
         router.push('/'); // Redirect to home or success page
       } else {
         setError(result.error || 'Failed to update response');

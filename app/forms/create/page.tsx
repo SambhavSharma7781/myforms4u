@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 import QuestionCard from "@/components/QuestionCard";
 import { navbarEvents } from "@/components/Navbar";
 import LoadingSpinner from "@/components/LoadingSpinner";
+import { useToast } from "@/hooks/use-toast";
 
 type QuestionType = "SHORT_ANSWER" | "PARAGRAPH" | "MULTIPLE_CHOICE" | "CHECKBOXES" | "DROPDOWN";
 
@@ -33,6 +34,7 @@ interface Question {
 export default function CreateFormPage() {
   const { isSignedIn, isLoaded } = useAuth();
   const router = useRouter();
+  const { toast } = useToast();
   
   const [formTitle, setFormTitle] = useState("Untitled form");
   const [formDescription, setFormDescription] = useState("");
@@ -40,13 +42,6 @@ export default function CreateFormPage() {
   const [saved, setSaved] = useState(false);
   const [justSaved, setJustSaved] = useState(false);
   
-  // Track if there are unsaved changes
-  const hasUnsavedChanges = () => {
-    const hasContent = formTitle.trim() !== "Untitled form" || 
-                      formDescription.trim() !== "" || 
-                      questions.some(q => q.question.trim() !== "");
-    return hasContent;
-  };
   const [questions, setQuestions] = useState<Question[]>([
     {
       id: "1",
@@ -55,6 +50,65 @@ export default function CreateFormPage() {
       required: false
     }
   ]);
+  
+  // Track original state for proper change detection
+  const [originalFormTitle] = useState("Untitled form");
+  const [originalFormDescription] = useState("");
+  const [originalQuestions] = useState<Question[]>([
+    {
+      id: "1",
+      question: "",
+      type: "SHORT_ANSWER",
+      required: false
+    }
+  ]);
+  
+  // Track if there are unsaved changes
+  const hasUnsavedChanges = () => {
+    // Helper function to normalize text (remove empty HTML tags)
+    const normalizeText = (text: string) => {
+      return text
+        .replace(/<br\s*\/?>/gi, '') // Remove <br> tags
+        .replace(/<p><\/p>/gi, '') // Remove empty <p> tags
+        .replace(/&nbsp;/g, '') // Remove non-breaking spaces
+        .trim();
+    };
+    
+    // Compare with original state
+    const titleChanged = normalizeText(formTitle) !== normalizeText(originalFormTitle);
+    const descChanged = normalizeText(formDescription) !== normalizeText(originalFormDescription);
+    const lengthChanged = questions.length !== originalQuestions.length;
+    
+    if (titleChanged) return true;
+    if (descChanged) return true;
+    if (lengthChanged) return true;
+    
+    // Check if any question content changed
+    for (let i = 0; i < questions.length; i++) {
+      const currentQ = questions[i];
+      const originalQ = originalQuestions[i];
+      
+      if (!originalQ) return true; // New question added
+      
+      const currentText = normalizeText(currentQ.question);
+      const originalText = normalizeText(originalQ.question);
+      
+      if (currentText !== originalText) return true;
+      if (currentQ.type !== originalQ.type) return true;
+      if (currentQ.required !== originalQ.required) return true;
+      
+      // Check options for choice-based questions
+      const currentOptions = currentQ.options || [];
+      const originalOptions = originalQ.options || [];
+      if (currentOptions.length !== originalOptions.length) return true;
+      
+      for (let j = 0; j < currentOptions.length; j++) {
+        if (currentOptions[j]?.text !== originalOptions[j]?.text) return true;
+      }
+    }
+    
+    return false;
+  };
   
   // Tab system
   const [activeTab, setActiveTab] = useState<'questions' | 'settings'>('questions');
@@ -120,39 +174,50 @@ export default function CreateFormPage() {
       return;
     }
 
-    // Check if there are any questions with content
-    const hasValidQuestions = questions.some(q => q.question.trim() !== "");
-    if (!hasValidQuestions) {
-      alert('Please add at least one question to the form.');
-      return;
+    // Helper function to normalize text (strip HTML)
+    const normalizeText = (text: string) => {
+      return text
+        .replace(/<br\s*\/?>/gi, '') // Remove <br> tags
+        .replace(/<p><\/p>/gi, '') // Remove empty <p> tags
+        .replace(/&nbsp;/g, '') // Remove non-breaking spaces
+        .trim();
+    };
+
+    // Validate only the first question
+    if (questions.length > 0) {
+      const firstQuestion = questions[0];
+      const hasText = firstQuestion.question && normalizeText(firstQuestion.question) !== '';
+      const hasImage = firstQuestion.imageUrl && firstQuestion.imageUrl.trim() !== '';
+      const hasOptions = firstQuestion.options && firstQuestion.options.length > 0 && 
+                         firstQuestion.options.some(opt => 
+                           (opt.text && opt.text.trim() !== '') || 
+                           (opt.imageUrl && opt.imageUrl.trim() !== '')
+                         );
+      
+      if (!hasText && !hasImage && !hasOptions) {
+        toast({
+          title: "Cannot save form",
+          description: "The first question must have text, an image, or options.",
+          variant: "destructive",
+        });
+        return;
+      }
     }
 
     setSaving(true);
     setJustSaved(false);
     setTimeout(() => {
-      if (process.env.NODE_ENV === 'development') console.log("Current questions state before validation:", questions);
-      const validQuestions = questions.filter(q => {
-        if (process.env.NODE_ENV === 'development') console.log("Checking question validity:", q.question);
-        const isValid = q.question.trim() !== "";
-        if (process.env.NODE_ENV === 'development') console.log("Is question valid?", isValid);
-        return isValid;
-      }).map(q => ({
+      // Save ALL questions, including empty ones (no filtering by content)
+      // Only filter empty options within questions
+      const questionsToSave = questions.map(q => ({
         ...q,
         options: q.options?.filter(opt => opt.text.trim() !== '' || opt.imageUrl) || []
       }));
 
-      if (process.env.NODE_ENV === 'development') console.log("Filtered valid questions:", validQuestions);
-
-      if (validQuestions.length === 0) {
-        // alert("Please add at least one question with text");
-        setSaving(false);
-        return;
-      }
-
       const formData = {
         title: formTitle,
         description: formDescription,
-        questions: validQuestions,
+        questions: questionsToSave,
         published: published,
         settings: formSettings
       };
@@ -178,7 +243,11 @@ export default function CreateFormPage() {
             }, 1000);
           } else {
             setSaving(false);
-            alert('Error saving form: ' + (result.message || 'Unknown error'));
+            toast({
+              title: "Error saving form",
+              description: result.message || 'Unknown error',
+              variant: "destructive",
+            });
           }
         })
         .catch(() => {
@@ -196,7 +265,11 @@ export default function CreateFormPage() {
       const handleNavbarPublish = () => {
         // Check for unsaved changes before publishing
         if (hasUnsavedChanges()) {
-          alert('Please save the draft before publishing.');
+          toast({
+            title: "Cannot publish",
+            description: "Please save the draft before publishing.",
+            variant: "destructive",
+          });
           return;
         }
         if (typeof handleSaveForm === 'function') {
@@ -275,6 +348,39 @@ export default function CreateFormPage() {
   }
 
   const handleAddQuestion = () => {
+    // Validation: Only check the first question
+    if (questions.length > 0) {
+      const firstQuestion = questions[0];
+      
+      // Helper function to normalize text (strip HTML)
+      const normalizeText = (text: string) => {
+        return text
+          .replace(/<br\s*\/?>/gi, '') // Remove <br> tags
+          .replace(/<p><\/p>/gi, '') // Remove empty <p> tags
+          .replace(/&nbsp;/g, '') // Remove non-breaking spaces
+          .trim();
+      };
+      
+      // Check if first question has valid content
+      const hasText = firstQuestion.question && normalizeText(firstQuestion.question) !== '';
+      const hasImage = firstQuestion.imageUrl && firstQuestion.imageUrl.trim() !== '';
+      const hasOptions = firstQuestion.options && firstQuestion.options.length > 0 && 
+                         firstQuestion.options.some(opt => 
+                           (opt.text && opt.text.trim() !== '') || 
+                           (opt.imageUrl && opt.imageUrl.trim() !== '')
+                         );
+      
+      // Only show toast if first question is completely empty
+      if (!hasText && !hasImage && !hasOptions) {
+        toast({
+          title: "Cannot add question",
+          description: "Please add text, an image, or options to the first question before adding more.",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+    
     const newQuestion: Question = {
       id: Date.now().toString(),
       question: "",
@@ -334,7 +440,6 @@ export default function CreateFormPage() {
             }
           : q
       );
-      if (process.env.NODE_ENV === 'development') console.log("Updated questions state:", updatedQuestions);
       return updatedQuestions;
     });
   };

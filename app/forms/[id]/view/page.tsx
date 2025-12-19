@@ -255,9 +255,6 @@ export default function PublicFormView() {
   const calculateQuizScore = () => {
     if (!formData?.isQuiz || !shuffledQuestions.length) return null;
     
-    if (process.env.NODE_ENV === 'development') console.log('Calculating quiz score for questions:', shuffledQuestions);
-    if (process.env.NODE_ENV === 'development') console.log('User responses:', responses);
-    
     let totalScore = 0;
     let maxScore = 0;
     const results: { [questionId: string]: { isCorrect: boolean; pointsEarned: number } } = {};
@@ -267,14 +264,6 @@ export default function PublicFormView() {
       const questionPoints = question.points || 1;
       maxScore += questionPoints;
       
-      if (process.env.NODE_ENV === 'development') console.log(`Question ${question.id}:`, {
-        text: question.text,
-        type: question.type,
-        correctAnswers: question.correctAnswers,
-        userResponse,
-        points: questionPoints
-      });
-      
       let isCorrect = false;
       let pointsEarned = 0;
       
@@ -282,7 +271,6 @@ export default function PublicFormView() {
         // Single correct answer
         isCorrect = question.correctAnswers?.includes(userResponse as string) || false;
         pointsEarned = isCorrect ? questionPoints : 0;
-        if (process.env.NODE_ENV === 'development') console.log(`Multiple choice result: isCorrect=${isCorrect}, pointsEarned=${pointsEarned}`);
       } else if (question.type === 'CHECKBOXES') {
         // Multiple correct answers
         const userAnswers = userResponse as string[] || [];
@@ -298,7 +286,6 @@ export default function PublicFormView() {
         const result = calculateTextScore(userResponse as string, question.correctAnswers || [], questionPoints, question.type);
         isCorrect = result.percentage >= 100;
         pointsEarned = result.points;
-        if (process.env.NODE_ENV === 'development') console.log(`Text question result: ${result.percentage}% match, ${result.points}/${questionPoints} points`);
       } else {
         // Other question types - no scoring yet
         isCorrect = false;
@@ -376,13 +363,6 @@ export default function PublicFormView() {
           updateProgress(1, data.form.sections.length);
         }
         
-        if (process.env.NODE_ENV === 'development') console.log('📋 Form loaded:', {
-          isQuiz: data.form.isQuiz,
-          showCorrectAnswers: data.form.showCorrectAnswers,
-          releaseGrades: data.form.releaseGrades,
-          formTitle: data.form.title
-        });
-        
         // Process sections and questions.
         // - Shuffle options per-question when enabled
         // - If `shuffleQuestions` is enabled, shuffle question order WITHIN each section (preserves sections)
@@ -415,17 +395,6 @@ export default function PublicFormView() {
 
 
         const allQuestionsFlat = processedSections.flatMap((s: any) => s.questions || []);
-        if (process.env.NODE_ENV === 'development') console.log('🖼️ DEBUG: Form questions and options:', allQuestionsFlat.map((q: any) => ({
-          id: q.id,
-          type: q.type,
-          text: q.text?.substring(0, 50),
-          optionCount: q.options?.length || 0,
-          options: q.options?.map((opt: any) => ({
-            text: opt.text || '[EMPTY]',
-            hasImage: !!opt.imageUrl,
-            imageUrl: opt.imageUrl?.substring(0, 50) + (opt.imageUrl?.length > 50 ? '...' : '')
-          })) || []
-        })));
 
         // Update formData to include processed (and possibly shuffled) sections
         setFormData({ ...data.form, sections: processedSections });
@@ -556,17 +525,6 @@ export default function PublicFormView() {
         })
       });
 
-      if (process.env.NODE_ENV === 'development') console.log('🔄 Submitting form data:', {
-        responses,
-        responseKeys: Object.keys(responses),
-        responseValues: Object.values(responses),
-        quizScore: quizScore ? {
-          totalScore: quizScore.totalScore,
-          maxScore: quizScore.maxScore,
-          resultsKeys: Object.keys(quizScore.results)
-        } : 'No quiz score'
-      });
-
       const result = await response.json();
       
       if (result.success) {
@@ -656,16 +614,6 @@ export default function PublicFormView() {
         );
 
       case 'MULTIPLE_CHOICE':
-        if (process.env.NODE_ENV === 'development') console.log('🔍 MULTIPLE_CHOICE Debug:', {
-          questionId: question.id,
-          totalOptions: question.options.length,
-          filteredOptions: question.options.filter((option) => option.text?.trim() || option.imageUrl).length,
-          optionsDetails: question.options.map(opt => ({
-            text: opt.text || '[EMPTY]',
-            hasImage: !!opt.imageUrl,
-            willShow: !!(opt.text?.trim() || opt.imageUrl)
-          }))
-        });
         return (
           <div className="space-y-3">
             {question.options

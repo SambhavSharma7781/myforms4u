@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@clerk/nextjs';
 import Link from 'next/link';
@@ -9,6 +9,16 @@ import LoadingSpinner from '@/components/LoadingSpinner';
 import QuestionCard from '@/components/QuestionCard';
 import RichTextEditor from '@/components/RichTextEditor';
 import { navbarEvents } from '@/components/Navbar';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 interface Question {
   id: string;
@@ -89,6 +99,8 @@ export default function Form() {
   const [justSaved, setJustSaved] = useState(false);
   const [loadingResponses, setLoadingResponses] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  const [savingSettings, setSavingSettings] = useState(false);
+  const [settingsSaved, setSettingsSaved] = useState(false);
   
   const [activeTab, setActiveTab] = useState<'questions' | 'responses' | 'settings'>('questions');
   const [responseData, setResponseData] = useState<ResponseData | null>(null);
@@ -100,6 +112,9 @@ export default function Form() {
   // Section deletion confirmation dialog
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [sectionToDelete, setSectionToDelete] = useState<{id: string, index: number, questionCount: number} | null>(null);
+  
+  // Form deletion confirmation dialog
+  const [deleteFormDialogOpen, setDeleteFormDialogOpen] = useState(false);
 
   // Track original form data to detect changes
   const [originalFormData, setOriginalFormData] = useState<FormData | null>(null);
@@ -153,26 +168,13 @@ export default function Form() {
   const hasUnsavedChanges = () => {
     // For new forms (no original data), always allow saving if there's content
     if (!originalFormData) {
-      if (process.env.NODE_ENV === 'development') console.log('🔍 CHANGE DETECTION - No original form data, allowing save.');
       return true; // Allow saving new forms
     }
 
     // Compare title and description
-    if (process.env.NODE_ENV === 'development') console.log('🔍 CHANGE DETECTION - Comparing title and description:', {
-      currentTitle: formData.title,
-      originalTitle: originalFormData.title,
-      currentDescription: formData.description,
-      originalDescription: originalFormData.description
-    });
 
     if (formData.title !== originalFormData.title || 
         formData.description !== originalFormData.description) {
-      if (process.env.NODE_ENV === 'development') console.log('🔍 CHANGE DETECTION - Title or description changed.');
-      return true;
-    }
-
-    // Compare form settings (including quiz settings)
-    if (hasUnsavedSettingsChanges()) {
       return true;
     }
 
@@ -190,7 +192,6 @@ export default function Form() {
       const originalSection = originalSections[i];
       
       if (!originalSection) {
-        if (process.env.NODE_ENV === 'development') console.log('🔍 CHANGE DETECTION - New section detected');
         return true; // New section
       }
       
@@ -200,18 +201,7 @@ export default function Form() {
       const currentDesc = currentSection.description || '';
       const originalDesc = originalSection.description || '';
       
-      if (process.env.NODE_ENV === 'development') console.log('🔍 CHANGE DETECTION - Comparing section:', {
-        index: i,
-        currentTitle,
-        originalTitle,
-        currentDesc,
-        originalDesc,
-        titleChanged: currentTitle !== originalTitle,
-        descChanged: currentDesc !== originalDesc
-      });
-      
       if (currentTitle !== originalTitle || currentDesc !== originalDesc) {
-        if (process.env.NODE_ENV === 'development') console.log('🔍 CHANGE DETECTION - Section change detected!');
         return true;
       }
     }
@@ -428,7 +418,6 @@ export default function Form() {
           // Only fetch on initial load, not on subsequent auth state changes
           // Check if we haven't already loaded the form data
           if (!formData.id) {
-            if (process.env.NODE_ENV === 'development') console.log('🔵 INITIAL LOAD - Fetching form data for the first time');
             fetchFormData();
             fetchResponseCount();
           }
@@ -446,7 +435,8 @@ export default function Form() {
   useEffect(() => {
     let refreshInterval: NodeJS.Timeout;
     
-    if (activeTab === 'responses' && isExistingForm && formData.published) {
+    // Only auto-refresh if form is published AND has responses (no need to refresh empty state)
+    if (activeTab === 'responses' && isExistingForm && formData.published && responseCount > 0) {
       // Refresh responses every 10 seconds when on responses tab
       refreshInterval = setInterval(() => {
         fetchResponses();
@@ -459,7 +449,7 @@ export default function Form() {
         clearInterval(refreshInterval);
       }
     };
-  }, [activeTab, isExistingForm, formData.published]);
+  }, [activeTab, isExistingForm, formData.published, responseCount]);
 
   // Listen for navbar publish button clicks
   useEffect(() => {
@@ -541,28 +531,67 @@ export default function Form() {
         justSaved: justSaved
       });
     }
-  }, [formData.published, formData.acceptingResponses, formData.id, formData.title, isExistingForm, loading, saving, justSaved, formData, formSettings]);
+  }, [formData.published, formData.acceptingResponses, formData.id, formData.title, isExistingForm, loading, saving, justSaved, formData]);
 
-  // Sync formData with formSettings changes for components that rely on formData
+  // Auto-save settings to database
+  const settingsSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  const autoSaveSettings = async (settings: typeof formSettings) => {
+    // Only auto-save for existing forms
+    if (!isExistingForm) return;
+    
+    setSavingSettings(true);
+    try {
+      const response = await fetch(`/api/forms/${formId}/settings`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(settings),
+      });
+
+      const data = await response.json();
+      
+      if (data.success) {
+        // Update original settings to mark as saved
+        setOriginalSettings(JSON.parse(JSON.stringify(settings)));
+        setSettingsSaved(true);
+        setTimeout(() => setSettingsSaved(false), 2000);
+      }
+    } catch (error) {
+      console.error('Error auto-saving settings:', error);
+    } finally {
+      setSavingSettings(false);
+    }
+  };
+
+  // Debounced auto-save effect for settings changes
   useEffect(() => {
-    setFormData(prev => ({
-      ...prev,
-      // Only sync specific settings properties, don't overwrite title/description/sections
-      shuffleQuestions: formSettings.shuffleQuestions,
-      collectEmail: formSettings.collectEmail,
-      allowMultipleResponses: formSettings.allowMultipleResponses,
-      showProgress: formSettings.showProgress,
-      confirmationMessage: formSettings.confirmationMessage,
-      defaultRequired: formSettings.defaultRequired,
-      isQuiz: formSettings.isQuiz,
-      showCorrectAnswers: formSettings.showCorrectAnswers,
-      releaseGrades: formSettings.releaseGrades,
-      allowResponseEditing: formSettings.allowResponseEditing,
-      editTimeLimit: formSettings.editTimeLimit,
-      themeColor: formSettings.themeColor,
-      themeBackground: formSettings.themeBackground
-    }));
-  }, [formSettings]);
+    // Don't auto-save if:
+    // 1. Form hasn't been created yet
+    // 2. Settings haven't changed from original
+    // 3. Original settings haven't been loaded yet
+    if (!isExistingForm || !originalSettings || JSON.stringify(formSettings) === JSON.stringify(originalSettings)) {
+      return;
+    }
+
+    // Clear any existing timeout
+    if (settingsSaveTimeoutRef.current) {
+      clearTimeout(settingsSaveTimeoutRef.current);
+    }
+
+    // Set new timeout for debounced save (500ms delay)
+    settingsSaveTimeoutRef.current = setTimeout(() => {
+      autoSaveSettings(formSettings);
+    }, 500);
+
+    // Cleanup function
+    return () => {
+      if (settingsSaveTimeoutRef.current) {
+        clearTimeout(settingsSaveTimeoutRef.current);
+      }
+    };
+  }, [formSettings, isExistingForm, formId]);
 
   // Cleanup navbar when component unmounts
   useEffect(() => {
@@ -651,9 +680,6 @@ export default function Form() {
   // Fetch form data function
   const fetchFormData = async (shouldUpdateOriginal = true) => {
     try {
-      // Add debug logs to fetchFormData
-      if (process.env.NODE_ENV === 'development') console.log('🔍 DEBUG - Refetching form data for formId:', formId);
-      
       // Add cache-busting headers to fetchFormData
       const response = await fetch(`/api/forms/${formId}`, {
         headers: {
@@ -664,16 +690,6 @@ export default function Form() {
       const data = await response.json();
       
       if (data.success) {
-        if (process.env.NODE_ENV === 'development') console.log('🔍 FETCHED FORM DATA - Title from DB:', data.form.title);
-        if (process.env.NODE_ENV === 'development') console.log('🔍 FETCHED FORM DATA - Description from DB:', data.form.description);
-        if (process.env.NODE_ENV === 'development') console.log('🔍 FETCHED FORM DATA - Sections:', data.form.sections?.map((s: any) => ({
-          title: s.title,
-          description: s.description,
-          questionsCount: s.questions?.length || 0
-        })));
-        
-        // Add debug logs to setFormData
-        if (process.env.NODE_ENV === 'development') console.log('🔍 DEBUG - Updating formData state with:', data.form);
         setFormData(data.form);
         
         // Only update originalFormData when initially loading the form, not after saves
@@ -700,10 +716,6 @@ export default function Form() {
           themeColor: data.form.themeColor || '#4285F4',
           themeBackground: data.form.themeBackground || 'rgba(66, 133, 244, 0.1)'
         };
-        if (process.env.NODE_ENV === 'development') console.log('🎨 LOADED THEME SETTINGS:', { 
-          themeColor: loadedSettings.themeColor, 
-          themeBackground: loadedSettings.themeBackground 
-        });
         setFormSettings(loadedSettings);
         
         // Only update originalSettings when initially loading the form, not after saves
@@ -746,6 +758,13 @@ export default function Form() {
   };
 
   const fetchResponses = async () => {
+    // Skip API call if form is not published and there are no responses
+    // This prevents unnecessary loading states for forms that aren't live
+    if (!formData.published && responseCount === 0) {
+      setLoadingResponses(false);
+      return;
+    }
+
     setLoadingResponses(true);
     try {
       const response = await fetch(`/api/forms/${formId}/responses`);
@@ -765,7 +784,6 @@ export default function Form() {
 
   // Form editing functions
   const updateFormTitle = (title: string) => {
-    if (process.env.NODE_ENV === 'development') console.log('🔵 UPDATE FORM TITLE - Setting title to:', title);
     setFormData(prevData => ({ ...prevData, title }));
   };
 
@@ -1014,12 +1032,8 @@ export default function Form() {
   };
 
   const saveForm = async (forcePublished?: boolean) => {
-    if (process.env.NODE_ENV === 'development') console.log('🔵 FRONTEND SAVE - Starting save with formData.title:', formData.title);
-    if (process.env.NODE_ENV === 'development') console.log('🔵 FRONTEND SAVE - Starting save with formData.description:', formData.description);
-    
     // Prevent duplicate save calls
     if (saving) {
-      if (process.env.NODE_ENV === 'development') console.log('⚠️ Save already in progress, ignoring duplicate call');
       return;
     }
     
@@ -1078,12 +1092,6 @@ export default function Form() {
         : (forcePublished !== undefined ? forcePublished : false);
       
       // Create payload with correct published status and proper data structure
-      if (process.env.NODE_ENV === 'development') console.log('🔵 FRONTEND SAVE - Current formData before payload:', {
-        title: formData.title,
-        description: formData.description,
-        sectionsCount: formData.sections?.length || 0
-      });
-      
       const allQuestions = getAllQuestions(formData.sections || []);
       
       // Process sections to filter out temporary IDs and structure data properly
@@ -1138,20 +1146,8 @@ export default function Form() {
         settings: validateSettings(formSettings)
       };
       
-      // Add debug logs to verify the payload
-      if (process.env.NODE_ENV === 'development') console.log('🔍 DEBUG - Payload title:', payload.title);
-      if (process.env.NODE_ENV === 'development') console.log('🔍 DEBUG - Payload description:', payload.description);
-      
       const url = isExistingForm ? `/api/forms/update/${formId}` : '/api/forms/create';
       const method = isExistingForm ? 'PUT' : 'POST';
-      
-      if (process.env.NODE_ENV === 'development') console.log('🔵 FRONTEND SAVE - Payload being sent:', {
-        title: payload.title,
-        description: payload.description,
-        sectionsCount: payload.sections.length,
-        url,
-        method
-      });
       
       const response = await fetch(url, {
         method,
@@ -1161,9 +1157,7 @@ export default function Form() {
         body: JSON.stringify(payload),
       });
 
-      if (process.env.NODE_ENV === 'development') console.log('🔵 FRONTEND SAVE - Response status:', response.status);
       const data = await response.json();
-      if (process.env.NODE_ENV === 'development') console.log('🔵 FRONTEND SAVE - Response data:', data);
       
       if (!response.ok) {
         console.error('❌ API ERROR - Status:', response.status);
@@ -1174,18 +1168,7 @@ export default function Form() {
       
       if (data.success) {
         // After successful save, refetch the form data to get the latest state from database
-        if (process.env.NODE_ENV === 'development') console.log('🔵 FRONTEND SAVE - Success, refetching form data');
-        if (process.env.NODE_ENV === 'development') console.log('🔵 FRONTEND SAVE - Current formData before refetch:', {
-          sectionsCount: formData.sections?.length,
-          sections: formData.sections?.map((s: any) => ({ title: s.title, qCount: s.questions?.length }))
-        });
-        
         const fetchedData = await fetchFormData(false);
-        
-        if (process.env.NODE_ENV === 'development') console.log('🔵 FRONTEND SAVE - Fetched data after save:', {
-          sectionsCount: fetchedData?.formData?.sections?.length,
-          sections: fetchedData?.formData?.sections?.map((s: any) => ({ title: s.title, qCount: s.questions?.length }))
-        });
 
         // Immediately set originalFormData and originalSettings from the fresh fetched data
         if (fetchedData) {
@@ -1259,7 +1242,6 @@ export default function Form() {
     setPublishing(true);
     try {
       const newPublishedStatus = !formData.published;
-      if (process.env.NODE_ENV === 'development') console.log('togglePublishStatus - Changing from:', formData.published, 'to:', newPublishedStatus);
       
       const response = await fetch(`/api/forms/${formId}/publish`, {
         method: 'PATCH',
@@ -1270,10 +1252,8 @@ export default function Form() {
       });
 
       const data = await response.json();
-      if (process.env.NODE_ENV === 'development') console.log('togglePublishStatus - API response:', data);
       
       if (response.ok) {
-        if (process.env.NODE_ENV === 'development') console.log('togglePublishStatus - Updating form data to published:', newPublishedStatus);
         setFormData(prev => ({ ...prev, published: newPublishedStatus }));
         // Update navbar with new status
         navbarEvents.emit('formStatusUpdate', {
@@ -1283,7 +1263,6 @@ export default function Form() {
           title: formData.title
         });
         const message = newPublishedStatus ? 'Form published!' : 'Form unpublished (draft)';
-        if (process.env.NODE_ENV === 'development') console.log('togglePublishStatus - Alert message:', message, 'newPublishedStatus:', newPublishedStatus);
       } else {
         console.error('togglePublishStatus - API error:', data);
         // Show the API error message to the user
@@ -1304,7 +1283,6 @@ export default function Form() {
     setPublishing(true);
     try {
       const newAcceptingStatus = !formData.acceptingResponses;
-      if (process.env.NODE_ENV === 'development') console.log('toggleResponseAcceptance - Changing from:', formData.acceptingResponses, 'to:', newAcceptingStatus);
       
       const response = await fetch(`/api/forms/${formId}/toggle-responses`, {
         method: 'PATCH',
@@ -1315,10 +1293,8 @@ export default function Form() {
       });
 
       const data = await response.json();
-      if (process.env.NODE_ENV === 'development') console.log('toggleResponseAcceptance - API response:', data);
       
       if (response.ok) {
-        if (process.env.NODE_ENV === 'development') console.log('toggleResponseAcceptance - Updating form data to acceptingResponses:', newAcceptingStatus);
         setFormData(prev => ({ ...prev, acceptingResponses: newAcceptingStatus }));
         // Update navbar with new status
         navbarEvents.emit('formStatusUpdate', {
@@ -1338,13 +1314,47 @@ export default function Form() {
     }
   };
 
+  // Delete form function
+  const handleDeleteForm = () => {
+    if (!formId || formId === 'create') return;
+    setDeleteFormDialogOpen(true);
+  };
+
+  const confirmDeleteForm = async () => {
+    if (!formId || formId === 'create') return;
+    
+    try {
+      const response = await fetch(`/api/forms/delete/${formId}`, {
+        method: 'DELETE'
+      });
+      
+      if (response.ok) {
+        // Redirect to homepage after successful deletion
+        router.push('/');
+      } else {
+        alert('Failed to delete form. Please try again.');
+      }
+    } catch (error) {
+      console.error('Error deleting form:', error);
+      alert('An error occurred while deleting the form.');
+    } finally {
+      setDeleteFormDialogOpen(false);
+    }
+  };
+
   // Response functions
   const handleTabChange = (tab: 'questions' | 'responses' | 'settings') => {
     setActiveTab(tab);
     if (tab === 'responses') {
-      // Always fetch latest responses when switching to responses tab
-      fetchResponses();
-      fetchResponseCount(); // Also update the response count
+      // Only fetch responses if form is published OR if responses already exist in DB
+      // This prevents unnecessary API calls for unpublished forms with zero responses
+      if (formData.published || responseCount > 0) {
+        fetchResponses();
+        fetchResponseCount(); // Also update the response count
+      } else {
+        // Form is not published and has no responses - show "no responses" immediately
+        setLoadingResponses(false);
+      }
     }
   };
 
@@ -1435,12 +1445,28 @@ export default function Form() {
               </button>
             </div>
             
-            {/* Total Points Display */}
-            {formSettings.isQuiz && getAllQuestions(formData.sections || []).length > 0 && (
-              <div className="text-xs sm:text-sm text-gray-600 px-3 sm:px-4 lg:px-6 whitespace-nowrap">
-                Total points: {getAllQuestions(formData.sections || []).reduce((total: number, q: any) => total + (q.points || 1), 0)}
-              </div>
-            )}
+            <div className="flex items-center gap-3">
+              {/* Total Points Display */}
+              {formSettings.isQuiz && getAllQuestions(formData.sections || []).length > 0 && (
+                <div className="text-xs sm:text-sm text-gray-600 px-3 sm:px-4 lg:px-6 whitespace-nowrap">
+                  Total points: {getAllQuestions(formData.sections || []).reduce((total: number, q: any) => total + (q.points || 1), 0)}
+                </div>
+              )}
+              
+              {/* Delete Form Button */}
+              {isExistingForm && (
+                <button
+                  onClick={handleDeleteForm}
+                  className="px-3 sm:px-4 py-2 mr-2 text-xs sm:text-sm font-medium text-red-600 hover:text-red-700 hover:bg-red-50 rounded-md transition-colors flex items-center gap-1.5 whitespace-nowrap"
+                  title="Delete Form"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                  <span className="hidden sm:inline">Delete Form</span>
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
@@ -1464,9 +1490,15 @@ export default function Form() {
                   {formData.published && (
                     <div className="flex items-center space-x-2 text-xs sm:text-sm text-gray-600">
                       <span className="hidden sm:inline">Public link:</span>
-                      <span className="text-blue-600 font-mono text-xs truncate max-w-[120px] sm:max-w-none">
+                      <a
+                        href={typeof window !== 'undefined' ? `${window.location.origin}/forms/${formId}/view` : '#'}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:text-blue-700 hover:underline font-mono text-xs truncate max-w-[120px] sm:max-w-none cursor-pointer transition-colors"
+                        title="Click to open form"
+                      >
                         {typeof window !== 'undefined' ? `${window.location.origin}/forms/${formId}/view` : ''}
-                      </span>
+                      </a>
                       <button 
                         onClick={() => {
                           const url = `${window.location.origin}/forms/${formId}/view`;
@@ -1829,7 +1861,7 @@ export default function Form() {
             </div>
 
             {/* Responses List */}
-            {loadingResponses ? (
+            {loadingResponses && formData.published && responseCount > 0 ? (
               <div className="bg-white rounded-lg border border-gray-200 p-6 sm:p-8">
                 <LoadingSpinner message="Loading responses..." size="md" fullScreen={false} />
               </div>
@@ -1954,8 +1986,36 @@ export default function Form() {
 
             {/* Form Settings */}
             <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6">
-              <div className="flex items-center mb-4 sm:mb-6">
+              <div className="flex items-center justify-between mb-4 sm:mb-6">
                 <h3 className="text-base sm:text-lg font-medium text-gray-900">Form Settings</h3>
+                
+                {/* Auto-save indicator */}
+                {isExistingForm && (
+                  <div className="flex items-center space-x-2 text-xs sm:text-sm">
+                    {savingSettings && (
+                      <span className="text-gray-500 flex items-center space-x-1.5">
+                        <svg className="animate-spin h-3 w-3 sm:h-4 sm:w-4" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <span>Saving...</span>
+                      </span>
+                    )}
+                    {settingsSaved && !savingSettings && (
+                      <span className="text-green-600 flex items-center space-x-1.5">
+                        <svg className="h-3 w-3 sm:h-4 sm:w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                        </svg>
+                        <span>Saved</span>
+                      </span>
+                    )}
+                    {!savingSettings && !settingsSaved && (
+                      <span className="text-gray-400 text-xs">
+                        Changes auto-save
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div className="space-y-4 sm:space-y-6">
@@ -2429,53 +2489,6 @@ export default function Form() {
 
               </div>
 
-              {/* Save Settings Button */}
-              <div className="mt-6 sm:mt-8 pt-4 sm:pt-6 border-t border-gray-200">
-                <div className="flex justify-end">
-                  <button
-                    onClick={async () => {
-                      if (!isExistingForm) {
-                        return;
-                      }
-                      
-                      setSaving(true);
-                      try {
-                        const response = await fetch(`/api/forms/${formId}/settings`, {
-                          method: 'PUT',
-                          headers: {
-                            'Content-Type': 'application/json',
-                          },
-                          body: JSON.stringify(formSettings),
-                        });
-
-                        const data = await response.json();
-                        
-                        if (data.success) {
-                          // Update the form data with new settings to keep everything in sync
-                          setFormData(prev => ({
-                            ...prev,
-                            ...data.settings
-                          }));
-                          // Update original settings to reflect saved state
-                          setOriginalSettings(formSettings);
-                        } else {
-                        }
-                      } catch (error) {
-                        console.error('Error saving settings:', error);
-                      } finally {
-                        setSaving(false);
-                      }
-                    }}
-                    disabled={saving || !isExistingForm || !hasUnsavedSettingsChanges()}
-                    className={`px-4 py-2 text-white text-sm font-medium rounded-md focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors ${
-                      hasUnsavedSettingsChanges() ? 'bg-blue-600 hover:bg-blue-700' : 'bg-gray-400'
-                    }`}
-                  >
-                    {saving ? 'Saving...' : hasUnsavedSettingsChanges() ? 'Save Settings' : 'No Changes'}
-                  </button>
-                </div>
-              </div>
-
             </div>
           </div>
         )}
@@ -2517,6 +2530,26 @@ export default function Form() {
           </div>
         </div>
       )}
+
+      {/* Delete Form Confirmation Dialog */}
+      <AlertDialog open={deleteFormDialogOpen} onOpenChange={setDeleteFormDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Form</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this form? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setDeleteFormDialogOpen(false)}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDeleteForm}>
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
