@@ -205,11 +205,7 @@ export default function PublicFormView() {
         
         // Count matching words
         const matchingWords = wordsToMatch.filter(word => 
-          userWords.some(userWord => 
-            userWord === word || 
-            (word.length > 3 && userWord.includes(word)) ||
-            (userWord.length > 3 && word.includes(userWord))
-          )
+          userWords.some(userWord => userWord === word)
         );
         
         // Calculate percentage based on matching words (using filtered words for scoring)
@@ -217,12 +213,7 @@ export default function PublicFormView() {
         
         // Different scoring logic based on question type
         if (questionType === 'SHORT_ANSWER') {
-          // SHORT_ANSWER: Strict - Must match ALL important words to get any points
-          if (matchingWords.length === wordsToMatch.length && wordsToMatch.length > 0) {
-            matchPercentage = 100; // Only give points if complete answer
-          } else {
-            matchPercentage = 0; // No partial credit for short answers
-          }
+          matchPercentage = wordMatchPercentage;
         } else {
           // PARAGRAPH: Flexible scoring with partial credit
           if (wordMatchPercentage >= 80) {

@@ -85,7 +85,7 @@ export async function POST(
         formId: formId,
         email: form.collectEmail ? email : null,
         // Quiz fields
-        totalScore: totalScore || null,
+        totalScore: totalScore ?? null,
         maxScore: maxScore || null,
         // Edit token fields
         editToken: editToken,

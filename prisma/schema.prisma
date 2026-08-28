@@ -112,7 +112,7 @@ model Response {
   createdAt DateTime   @default(now())
   
   // Quiz results
-  totalScore     Int?     // Total points scored (null for regular forms)
+  totalScore     Float?   // Total points scored (null for regular forms)
   maxScore       Int?     // Maximum possible points
   
   // Response editing
@@ -133,7 +133,7 @@ model Answer {
   
   // Quiz grading
   isCorrect      Boolean?
-  pointsEarned   Int?      
+  pointsEarned   Float?
   
   response       Response  @relation(fields: [responseId], references: [id])
   question       Question  @relation(fields: [questionId], references: [id])

@@ -39,8 +39,21 @@ export async function DELETE(
       );
     }
 
-    // Delete related data first, then form
-    // Step 1: Delete all options for questions in sections of this form
+    // Delete related data first, then form.
+    // Answers and responses must go first: Question.answers and Form.responses
+    // are required relations, so question/form deletes fail if they still exist.
+    await prisma.answer.deleteMany({
+      where: {
+        response: {
+          formId: formId
+        }
+      }
+    });
+
+    await prisma.response.deleteMany({
+      where: { formId: formId }
+    });
+
     await prisma.option.deleteMany({
       where: {
         question: {
@@ -51,7 +64,6 @@ export async function DELETE(
       }
     });
 
-    // Step 2: Delete all questions in sections of this form
     await prisma.question.deleteMany({
       where: {
         section: {
@@ -60,14 +72,12 @@ export async function DELETE(
       }
     });
 
-    // Step 3: Delete all sections of this form
     await prisma.section.deleteMany({
       where: {
         formId: formId
       }
     });
 
-    // Step 4: Delete the form
     await prisma.form.delete({
       where: { id: formId }
     });
