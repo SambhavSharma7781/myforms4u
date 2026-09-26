@@ -362,6 +362,7 @@ export default function Dashboard() {
                         }}>
                           <DropdownMenu.Trigger asChild>
                             <button
+                              aria-label="Form actions"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 handleMenuToggle(form.id);
