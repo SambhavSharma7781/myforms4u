@@ -226,18 +226,6 @@ middleware.ts                Clerk route protection
 
 Forms4U is deployed on Vercel, with MongoDB used as the database and Clerk used for authentication. The application uses the standard Next.js `build` and `start` scripts and requires the five environment variables listed above.
 
-## Known Limitations
-
-- Quiz scores are calculated on the client and trusted by the submit API; server-side re-grading would provide stronger validation.
-- Automated test coverage is currently limited; the repository does not include a test script.
-
-## Future Improvements
-
-- Re-grade quiz answers on the server and derive stored totals from the submitted answers.
-- Enforce publication, accepting-responses, and multiple-response rules in the submit handler.
-- Associate authenticated submissions with the local `User` model where appropriate.
-- Add automated coverage for API authorization, scoring, token expiry, and response validation.
-
 ## Author
 
 **Sambhav Sharma**
