@@ -166,7 +166,7 @@ export default function CreateFormPage() {
     sessionStorage.setItem('previewFormData', JSON.stringify(previewData));
     
     // Open preview in new tab
-    window.open('/forms/preview', '_blank');
+    window.open('/forms/preview', '_blank', 'noopener,noreferrer');
   };
 
   const handleSaveForm = async (published = false) => {

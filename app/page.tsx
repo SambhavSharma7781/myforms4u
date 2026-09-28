@@ -157,7 +157,7 @@ export default function Dashboard() {
 
   const handleOpenInNewTab = (formId: string) => {
     const url = `/forms/${formId}`;
-    window.open(url, '_blank');
+    window.open(url, '_blank', 'noopener,noreferrer');
     setOpenMenuId(null);
   };
 
