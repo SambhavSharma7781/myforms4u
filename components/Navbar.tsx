@@ -164,7 +164,7 @@ export default function Navbar() {
             <Button
               onClick={() => {
                 const url = `${window.location.origin}/forms/${formStatus.formId}/view?preview=true`;
-                window.open(url, '_blank');
+                window.open(url, '_blank', 'noopener,noreferrer');
               }}
               style={{ display: 'none' }}
               id="preview-button-edit"
