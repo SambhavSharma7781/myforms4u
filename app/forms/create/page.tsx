@@ -789,9 +789,9 @@ export default function CreateFormPage() {
 
         {/* Actions */}
         <div className="flex flex-col sm:flex-row justify-between gap-3 sm:gap-0">
-          <Link href="/">
-            <Button variant="outline">← Back to Home</Button>
-          </Link>
+          <Button asChild variant="outline">
+            <Link href="/">← Back to Home</Link>
+          </Button>
         </div>
 
       </div>
